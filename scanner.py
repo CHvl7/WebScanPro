@@ -1,22 +1,19 @@
-
 import requests
 
 # Function to check for SQL Injection
 def check_sql_injection(url):
     print("\n--- Running SQL Injection Check ---")
     
-    # 1. Define a simple SQL injection payload
+    # Define a simple SQL injection payload
     payload = "' OR 1=1 --"
     
-    # 2. Construct the URL (we assume the target accepts input in a simple GET parameter)
-    # NOTE: The Juice Shop login uses a POST request, but for this simple GET demonstration,
-    # we simulate checking a vulnerable GET parameter endpoint.
+    # Construct the URL for the simulated login test
     test_url = f"{url}/users/login?username={payload}&password=test" 
     
     try:
         response = requests.get(test_url, timeout=5)
         
-        # 3. Check for typical success indicators
+        # Check for typical success indicators
         if response.status_code == 200 and ("Welcome" in response.text or "Signed in" in response.text):
             print("!!! VULNERABILITY FOUND: SQL Injection may be possible with payload: " + payload)
         else:
@@ -25,11 +22,34 @@ def check_sql_injection(url):
     except requests.exceptions.RequestException as e:
         print(f"Error during SQL injection check: {e}")
 
+# Function to check for Cross-Site Scripting (XSS)
+def check_xss(url):
+    print("\n--- Running XSS Check ---")
+    
+    # Define a simple non-persistent XSS payload
+    payload = "<script>alert('XSS-Test')</script>"
+    
+    # Construct a URL to test for reflected XSS
+    test_url = f"{url}/search?q={payload}"  # Testing an endpoint that reflects user input
+    
+    try:
+        response = requests.get(test_url, timeout=5)
+        
+        # Check if the payload is reflected directly in the response body
+        if payload in response.text:
+            print("!!! VULNERABILITY FOUND: Possible Reflected XSS detected!")
+            print("Reflected Payload: " + payload)
+        else:
+            print("XSS check passed (payload not directly reflected).")
+            
+    except requests.exceptions.RequestException as e:
+        print(f"Error during XSS check: {e}")
+
 # Main scanner function
 def run_scanner(url):
     print(f"Starting scan for {url}")
     
-    # 1. Send a basic GET request (existing logic)
+    # 1. Send a basic GET request
     print(f"Testing URL: {url}")
     try:
         response = requests.get(url, timeout=5)
@@ -38,9 +58,10 @@ def run_scanner(url):
         if "OWASP Juice Shop" in response.text:
             print("Target identified as Juice Shop.")
             
-            # --- NEW STEP: CALL THE VULNERABILITY CHECK ---
-            check_sql_injection(url) 
-            # ----------------------------------------------
+            # --- VULNERABILITY CHECKS ---
+            check_sql_injection(url)  # Existing call
+            check_xss(url)            # <<< NEW XSS CHECK CALL
+            # ---------------------------
             
     except requests.exceptions.RequestException as e:
         print(f"Error accessing URL: {e}")
