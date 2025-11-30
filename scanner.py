@@ -1,13 +1,10 @@
 import requests
 
-# Function to check for SQL Injection
+# Function to check for SQL Injection (Refactored Error Handling)
 def check_sql_injection(url):
     print("\n--- Running SQL Injection Check ---")
     
-    # Define a simple SQL injection payload
     payload = "' OR 1=1 --"
-    
-    # Construct the URL for the simulated login test
     test_url = f"{url}/users/login?username={payload}&password=test" 
     
     try:
@@ -19,17 +16,21 @@ def check_sql_injection(url):
         else:
             print("SQL Injection check passed (no simple bypass detected).")
             
-    except requests.exceptions.RequestException as e:
-        print(f"Error during SQL injection check: {e}")
+    except requests.exceptions.Timeout:
+        # Handle specific timeout errors
+        print("[-] Error: SQL Injection check timed out.")
+    except requests.exceptions.ConnectionError:
+        # Handle specific connection refusal errors
+        print("[-] Error: SQL Injection check failed due to connection error.")
+    except requests.exceptions.RequestException:
+        # Handle all other request errors
+        print("[-] Error: SQL Injection check failed due to an unknown request error.")
 
-# Function to check for Cross-Site Scripting (XSS)
+# Function to check for Cross-Site Scripting (XSS) (Refactored Error Handling)
 def check_xss(url):
     print("\n--- Running XSS Check ---")
     
-    # Define a simple non-persistent XSS payload
     payload = "<script>alert('XSS-Test')</script>"
-    
-    # Construct a URL to test for reflected XSS
     test_url = f"{url}/search?q={payload}" 
     
     try:
@@ -42,15 +43,18 @@ def check_xss(url):
         else:
             print("XSS check passed (payload not directly reflected).")
             
-    except requests.exceptions.RequestException as e:
-        print(f"Error during XSS check: {e}")
+    except requests.exceptions.Timeout:
+        print("[-] Error: XSS check timed out.")
+    except requests.exceptions.ConnectionError:
+        print("[-] Error: XSS check failed due to connection error.")
+    except requests.exceptions.RequestException:
+        print("[-] Error: XSS check failed due to an unknown request error.")
 
-# Function to check for Broken Access Control (BAC/IDOR)
+# Function to check for Broken Access Control (BAC/IDOR) (Refactored Error Handling)
 def check_access_control(url):
     print("\n--- Running Access Control Check (IDOR/BAC) ---")
     
-    # Define a common path for sensitive files or user data (e.g., /ftp, /admin)
-    test_path = "/ftp"  # Testing for access to a protected directory without authorization
+    test_path = "/ftp" 
     test_url = url + test_path
     
     try:
@@ -65,11 +69,14 @@ def check_access_control(url):
         else:
             print(f"Access Control check passed (received status code {response.status_code}).")
             
-    except requests.exceptions.RequestException as e:
-        print(f"Error during access control check: {e}")
+    except requests.exceptions.Timeout:
+        print("[-] Error: Access Control check timed out.")
+    except requests.exceptions.ConnectionError:
+        print("[-] Error: Access Control check failed due to connection error.")
+    except requests.exceptions.RequestException:
+        print("[-] Error: Access Control check failed due to an unknown request error.")
 
-
-# Main scanner function
+# Main scanner function (Refactored Error Handling)
 def run_scanner(url):
     print(f"Starting scan for {url}")
     
@@ -85,11 +92,15 @@ def run_scanner(url):
             # --- VULNERABILITY CHECKS ---
             check_sql_injection(url)  
             check_xss(url)            
-            check_access_control(url) # <<< NEW ACCESS CONTROL CHECK CALL
+            check_access_control(url)
             # ---------------------------
             
-    except requests.exceptions.RequestException as e:
-        print(f"Error accessing URL: {e}")
+    except requests.exceptions.Timeout:
+        print("[-] Error: Initial connection timed out.")
+    except requests.exceptions.ConnectionError:
+        print("[-] Error: Initial connection failed due to target refusal (Is Docker running?).")
+    except requests.exceptions.RequestException:
+        print("[-] Error: Initial connection failed due to an unknown request error.")
 
 # Execution block remains the same
 if __name__ == "__main__":
