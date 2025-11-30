@@ -1,8 +1,11 @@
 import requests
 
-# Function to check for SQL Injection (Refactored Error Handling)
+# --- GLOBAL STORAGE FOR REPORTING (Change 1) ---
+VULNERABILITY_FINDINGS = []
+
+# Function to check for SQL Injection (Updated to use global list)
 def check_sql_injection(url):
-    print("\n--- Running SQL Injection Check ---")
+    global VULNERABILITY_FINDINGS
     
     payload = "' OR 1=1 --"
     test_url = f"{url}/users/login?username={payload}&password=test" 
@@ -10,25 +13,22 @@ def check_sql_injection(url):
     try:
         response = requests.get(test_url, timeout=5)
         
-        # Check for typical success indicators
         if response.status_code == 200 and ("Welcome" in response.text or "Signed in" in response.text):
-            print("!!! VULNERABILITY FOUND: SQL Injection may be possible with payload: " + payload)
+            VULNERABILITY_FINDINGS.append({
+                "type": "SQL Injection",
+                "status": "VULNERABLE",
+                "severity": "HIGH",
+                "details": f"Simple payload worked: {payload}"
+            })
         else:
-            print("SQL Injection check passed (no simple bypass detected).")
+            VULNERABILITY_FINDINGS.append({"type": "SQL Injection", "status": "PASSED", "severity": "LOW"})
             
-    except requests.exceptions.Timeout:
-        # Handle specific timeout errors
-        print("[-] Error: SQL Injection check timed out.")
-    except requests.exceptions.ConnectionError:
-        # Handle specific connection refusal errors
-        print("[-] Error: SQL Injection check failed due to connection error.")
     except requests.exceptions.RequestException:
-        # Handle all other request errors
-        print("[-] Error: SQL Injection check failed due to an unknown request error.")
+        VULNERABILITY_FINDINGS.append({"type": "SQL Injection", "status": "ERROR", "severity": "MEDIUM", "details": "Check failed due to connection error."})
 
-# Function to check for Cross-Site Scripting (XSS) (Refactored Error Handling)
+# Function to check for Cross-Site Scripting (XSS) (Updated to use global list)
 def check_xss(url):
-    print("\n--- Running XSS Check ---")
+    global VULNERABILITY_FINDINGS
     
     payload = "<script>alert('XSS-Test')</script>"
     test_url = f"{url}/search?q={payload}" 
@@ -36,23 +36,22 @@ def check_xss(url):
     try:
         response = requests.get(test_url, timeout=5)
         
-        # Check if the payload is reflected directly in the response body
         if payload in response.text:
-            print("!!! VULNERABILITY FOUND: Possible Reflected XSS detected!")
-            print("Reflected Payload: " + payload)
+            VULNERABILITY_FINDINGS.append({
+                "type": "Reflected XSS",
+                "status": "VULNERABLE",
+                "severity": "MEDIUM",
+                "details": f"Payload reflected in response body."
+            })
         else:
-            print("XSS check passed (payload not directly reflected).")
+            VULNERABILITY_FINDINGS.append({"type": "Reflected XSS", "status": "PASSED", "severity": "LOW"})
             
-    except requests.exceptions.Timeout:
-        print("[-] Error: XSS check timed out.")
-    except requests.exceptions.ConnectionError:
-        print("[-] Error: XSS check failed due to connection error.")
     except requests.exceptions.RequestException:
-        print("[-] Error: XSS check failed due to an unknown request error.")
+        VULNERABILITY_FINDINGS.append({"type": "Reflected XSS", "status": "ERROR", "severity": "MEDIUM", "details": "Check failed due to connection error."})
 
-# Function to check for Broken Access Control (BAC/IDOR) (Refactored Error Handling)
+# Function to check for Broken Access Control (BAC/IDOR) (Updated to use global list)
 def check_access_control(url):
-    print("\n--- Running Access Control Check (IDOR/BAC) ---")
+    global VULNERABILITY_FINDINGS
     
     test_path = "/ftp" 
     test_url = url + test_path
@@ -60,47 +59,71 @@ def check_access_control(url):
     try:
         response = requests.get(test_url, timeout=5)
         
-        # Check for success status codes (200 OK) on protected resources
         if response.status_code == 200:
-            print(f"!!! VULNERABILITY FOUND: Access Control bypass (BAC) detected!")
-            print(f"Unauthenticated access granted to: {test_path}")
-        elif response.status_code == 403:
-            print(f"Access Control check passed (access to {test_path} is correctly Forbidden/403).")
+            VULNERABILITY_FINDINGS.append({
+                "type": "Broken Access Control (BAC)",
+                "status": "VULNERABLE",
+                "severity": "HIGH",
+                "details": f"Unauthenticated access granted to: {test_path}"
+            })
         else:
-            print(f"Access Control check passed (received status code {response.status_code}).")
+            VULNERABILITY_FINDINGS.append({"type": "Broken Access Control (BAC)", "status": "PASSED", "severity": "LOW"})
             
-    except requests.exceptions.Timeout:
-        print("[-] Error: Access Control check timed out.")
-    except requests.exceptions.ConnectionError:
-        print("[-] Error: Access Control check failed due to connection error.")
     except requests.exceptions.RequestException:
-        print("[-] Error: Access Control check failed due to an unknown request error.")
+        VULNERABILITY_FINDINGS.append({"type": "Broken Access Control (BAC)", "status": "ERROR", "severity": "MEDIUM", "details": "Check failed due to connection error."})
 
-# Main scanner function (Refactored Error Handling)
+# --- NEW FUNCTION: GENERATE FINAL REPORT ---
+def generate_report(url):
+    print("\n" + "="*50)
+    print(f"| WEB SCANNER REPORT | TARGET: {url} |")
+    print("="*50)
+    
+    if not VULNERABILITY_FINDINGS:
+        print("| No scan results found. |")
+        print("="*50)
+        return
+
+    # Print summary table
+    print(f"| {'TYPE':<25} | {'STATUS':<10} | {'SEVERITY':<10} |")
+    print("-" * 50)
+    
+    total_vulnerabilities = 0
+    
+    for finding in VULNERABILITY_FINDINGS:
+        status = finding.get("status", "N/A")
+        print(f"| {finding['type']:<25} | {status:<10} | {finding['severity']:<10} |")
+        if status == "VULNERABLE":
+            total_vulnerabilities += 1
+            # Optional: Print detailed findings for vulnerabilities
+            # print(f"|   DETAILS: {finding['details']}")
+            
+    print("="*50)
+    print(f"| TOTAL VULNERABILITIES FOUND: {total_vulnerabilities:<20} |")
+    print("="*50)
+
+
+# Main scanner function (Updated to call generate_report instead of printing results)
 def run_scanner(url):
     print(f"Starting scan for {url}")
     
-    # 1. Send a basic GET request
-    print(f"Testing URL: {url}")
     try:
         response = requests.get(url, timeout=5)
         print(f"Status Code: {response.status_code}")
         
         if "OWASP Juice Shop" in response.text:
-            print("Target identified as Juice Shop.")
-            
-            # --- VULNERABILITY CHECKS ---
+            # RUN ALL VULNERABILITY CHECKS
             check_sql_injection(url)  
             check_xss(url)            
             check_access_control(url)
-            # ---------------------------
             
-    except requests.exceptions.Timeout:
-        print("[-] Error: Initial connection timed out.")
+            # --- FINAL STEP: GENERATE REPORT ---
+            generate_report(url)
+            # -----------------------------------
+            
     except requests.exceptions.ConnectionError:
-        print("[-] Error: Initial connection failed due to target refusal (Is Docker running?).")
+        print("[-] Fatal Error: Initial connection failed (Is Docker running?).")
     except requests.exceptions.RequestException:
-        print("[-] Error: Initial connection failed due to an unknown request error.")
+        print("[-] Fatal Error: Initial connection failed due to an unknown error.")
 
 # Execution block remains the same
 if __name__ == "__main__":
