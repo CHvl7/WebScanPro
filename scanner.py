@@ -1,4 +1,5 @@
 import requests
+import json # <<< ADDED FOR JSON OUTPUT
 
 # --- GLOBAL STORAGE FOR REPORTING (Change 1) ---
 VULNERABILITY_FINDINGS = []
@@ -72,8 +73,9 @@ def check_access_control(url):
     except requests.exceptions.RequestException:
         VULNERABILITY_FINDINGS.append({"type": "Broken Access Control (BAC)", "status": "ERROR", "severity": "MEDIUM", "details": "Check failed due to connection error."})
 
-# --- NEW FUNCTION: GENERATE FINAL REPORT ---
+# --- NEW FUNCTION: GENERATE FINAL REPORT (Now includes JSON output) ---
 def generate_report(url):
+    # 1. Generate Terminal Output (Existing Table)
     print("\n" + "="*50)
     print(f"| WEB SCANNER REPORT | TARGET: {url} |")
     print("="*50)
@@ -94,15 +96,29 @@ def generate_report(url):
         print(f"| {finding['type']:<25} | {status:<10} | {finding['severity']:<10} |")
         if status == "VULNERABLE":
             total_vulnerabilities += 1
-            # Optional: Print detailed findings for vulnerabilities
-            # print(f"|   DETAILS: {finding['details']}")
             
     print("="*50)
     print(f"| TOTAL VULNERABILITIES FOUND: {total_vulnerabilities:<20} |")
     print("="*50)
+    
+    # 2. Generate JSON File (NEW LOGIC)
+    report_data = {
+        "target": url,
+        "total_vulnerabilities": total_vulnerabilities,
+        "findings": VULNERABILITY_FINDINGS
+    }
+    
+    file_name = "security_report.json"
+    
+    try:
+        with open(file_name, 'w') as f:
+            json.dump(report_data, f, indent=4)
+        print(f"\n[INFO] JSON report saved to: {file_name}")
+    except Exception as e:
+        print(f"[-] Error saving JSON report: {e}")
 
 
-# Main scanner function (Updated to call generate_report instead of printing results)
+# Main scanner function (Updated to call generate_report as final step)
 def run_scanner(url):
     print(f"Starting scan for {url}")
     
