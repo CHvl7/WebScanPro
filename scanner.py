@@ -1,5 +1,6 @@
 import requests
-import json # <<< ADDED FOR JSON OUTPUT
+import json 
+import argparse # <<< ADDED FOR WEEK 4: COMMAND-LINE ARGUMENTS
 
 # --- GLOBAL STORAGE FOR REPORTING (Change 1) ---
 VULNERABILITY_FINDINGS = []
@@ -141,7 +142,17 @@ def run_scanner(url):
     except requests.exceptions.RequestException:
         print("[-] Fatal Error: Initial connection failed due to an unknown error.")
 
-# Execution block remains the same
+# Execution block now uses argparse to get the target URL
 if __name__ == "__main__":
-    target_url = "http://127.0.0.1:3000" 
+    
+    parser = argparse.ArgumentParser(description="WebScanPro: A simple web security scanner.")
+    parser.add_argument(
+        '-u', '--url', 
+        type=str, 
+        required=True, 
+        help='The target URL to scan (e.g., http://127.0.0.1:3000)'
+    )
+    args = parser.parse_args()
+    
+    target_url = args.url # Use the URL provided by the user
     run_scanner(target_url)
