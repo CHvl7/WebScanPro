@@ -1,11 +1,20 @@
 import requests
 import json 
-import argparse # <<< ADDED FOR WEEK 4: COMMAND-LINE ARGUMENTS
+import argparse # <<< ADDED FOR CLI ARGUMENTS
 
-# --- GLOBAL STORAGE FOR REPORTING (Change 1) ---
+# --- GLOBAL STORAGE FOR REPORTING ---
 VULNERABILITY_FINDINGS = []
 
-# Function to check for SQL Injection (Updated to use global list)
+# --- XSS PAYLOADS LIST (Comprehensive XSS Module) ---
+XSS_PAYLOADS = [
+    "<script>alert(1)</script>",
+    "<img src=x onerror=alert('XSS')>",
+    "';alert(String.fromCharCode(88,83,83))//",
+    "prompt(1)",
+    "confirm(1)"
+]
+
+# Function to check for SQL Injection 
 def check_sql_injection(url):
     global VULNERABILITY_FINDINGS
     
@@ -28,30 +37,40 @@ def check_sql_injection(url):
     except requests.exceptions.RequestException:
         VULNERABILITY_FINDINGS.append({"type": "SQL Injection", "status": "ERROR", "severity": "MEDIUM", "details": "Check failed due to connection error."})
 
-# Function to check for Cross-Site Scripting (XSS) (Updated to use global list)
+# Function to check for Cross-Site Scripting (XSS) - UPDATED FOR MULTIPLE PAYLOADS
 def check_xss(url):
     global VULNERABILITY_FINDINGS
+    global XSS_PAYLOADS # Access the new list
     
-    payload = "<script>alert('XSS-Test')</script>"
-    test_url = f"{url}/search?q={payload}" 
-    
+    # Define a common search path (Juice Shop search page)
+    search_path = "/search?q="
+    vulnerable_endpoint = None
+
     try:
-        response = requests.get(test_url, timeout=5)
-        
-        if payload in response.text:
+        for payload in XSS_PAYLOADS: # NEW LOGIC: Iterating through the payload list
+            test_url = f"{url}{search_path}{payload}" 
+            response = requests.get(test_url, timeout=5)
+            
+            # Check if the payload string is reflected in the response body
+            if payload in response.text:
+                vulnerable_endpoint = test_url
+                break # Stop scanning after the first successful hit
+
+        if vulnerable_endpoint:
             VULNERABILITY_FINDINGS.append({
-                "type": "Reflected XSS",
+                "type": "Reflected XSS (Comprehensive)",
                 "status": "VULNERABLE",
                 "severity": "MEDIUM",
-                "details": f"Payload reflected in response body."
+                "details": f"One of {len(XSS_PAYLOADS)} payloads was reflected at: {search_path}"
             })
         else:
-            VULNERABILITY_FINDINGS.append({"type": "Reflected XSS", "status": "PASSED", "severity": "LOW"})
+            VULNERABILITY_FINDINGS.append({"type": "Reflected XSS (Comprehensive)", "status": "PASSED", "severity": "LOW"})
             
     except requests.exceptions.RequestException:
-        VULNERABILITY_FINDINGS.append({"type": "Reflected XSS", "status": "ERROR", "severity": "MEDIUM", "details": "Check failed due to connection error."})
+        VULNERABILITY_FINDINGS.append({"type": "Reflected XSS (Comprehensive)", "status": "ERROR", "severity": "MEDIUM", "details": "Check failed due to connection error."})
 
-# Function to check for Broken Access Control (BAC/IDOR) (Updated to use global list)
+
+# Function to check for Broken Access Control (BAC/IDOR)
 def check_access_control(url):
     global VULNERABILITY_FINDINGS
     
@@ -74,9 +93,9 @@ def check_access_control(url):
     except requests.exceptions.RequestException:
         VULNERABILITY_FINDINGS.append({"type": "Broken Access Control (BAC)", "status": "ERROR", "severity": "MEDIUM", "details": "Check failed due to connection error."})
 
-# --- NEW FUNCTION: GENERATE FINAL REPORT (Now includes JSON output) ---
+# --- FUNCTION: GENERATE FINAL REPORT (Includes JSON output) ---
 def generate_report(url):
-    # 1. Generate Terminal Output (Existing Table)
+    # 1. Generate Terminal Output 
     print("\n" + "="*50)
     print(f"| WEB SCANNER REPORT | TARGET: {url} |")
     print("="*50)
@@ -102,7 +121,7 @@ def generate_report(url):
     print(f"| TOTAL VULNERABILITIES FOUND: {total_vulnerabilities:<20} |")
     print("="*50)
     
-    # 2. Generate JSON File (NEW LOGIC)
+    # 2. Generate JSON File
     report_data = {
         "target": url,
         "total_vulnerabilities": total_vulnerabilities,
@@ -119,7 +138,7 @@ def generate_report(url):
         print(f"[-] Error saving JSON report: {e}")
 
 
-# Main scanner function (Updated to call generate_report as final step)
+# Main scanner function
 def run_scanner(url):
     print(f"Starting scan for {url}")
     
@@ -142,7 +161,7 @@ def run_scanner(url):
     except requests.exceptions.RequestException:
         print("[-] Fatal Error: Initial connection failed due to an unknown error.")
 
-# Execution block now uses argparse to get the target URL
+# Execution block uses argparse to get the target URL
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="WebScanPro: A simple web security scanner.")
