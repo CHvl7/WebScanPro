@@ -1,11 +1,9 @@
 import requests
 import json 
-import argparse # <<< ADDED FOR CLI ARGUMENTS
+import argparse
 
-# --- GLOBAL STORAGE FOR REPORTING ---
 VULNERABILITY_FINDINGS = []
 
-# --- XSS PAYLOADS LIST (Comprehensive XSS Module) ---
 XSS_PAYLOADS = [
     "<script>alert(1)</script>",
     "<img src=x onerror=alert('XSS')>",
@@ -14,7 +12,18 @@ XSS_PAYLOADS = [
     "confirm(1)"
 ]
 
-# Function to check for SQL Injection 
+
+WEAK_CREDENTIALS = [
+    ("admin", "admin"),
+    ("user", "user"),
+    ("test", "test"),
+    ("guest", "guest"),
+    ("admin", "password")
+]
+
+
+CAPTURED_SESSIONS = {}
+
 def check_sql_injection(url):
     global VULNERABILITY_FINDINGS
     
@@ -37,24 +46,21 @@ def check_sql_injection(url):
     except requests.exceptions.RequestException:
         VULNERABILITY_FINDINGS.append({"type": "SQL Injection", "status": "ERROR", "severity": "MEDIUM", "details": "Check failed due to connection error."})
 
-# Function to check for Cross-Site Scripting (XSS) - UPDATED FOR MULTIPLE PAYLOADS
 def check_xss(url):
     global VULNERABILITY_FINDINGS
-    global XSS_PAYLOADS # Access the new list
+    global XSS_PAYLOADS
     
-    # Define a common search path (Juice Shop search page)
     search_path = "/search?q="
     vulnerable_endpoint = None
 
     try:
-        for payload in XSS_PAYLOADS: # NEW LOGIC: Iterating through the payload list
+        for payload in XSS_PAYLOADS:
             test_url = f"{url}{search_path}{payload}" 
             response = requests.get(test_url, timeout=5)
             
-            # Check if the payload string is reflected in the response body
             if payload in response.text:
                 vulnerable_endpoint = test_url
-                break # Stop scanning after the first successful hit
+                break
 
         if vulnerable_endpoint:
             VULNERABILITY_FINDINGS.append({
@@ -70,7 +76,6 @@ def check_xss(url):
         VULNERABILITY_FINDINGS.append({"type": "Reflected XSS (Comprehensive)", "status": "ERROR", "severity": "MEDIUM", "details": "Check failed due to connection error."})
 
 
-# Function to check for Broken Access Control (BAC/IDOR)
 def check_access_control(url):
     global VULNERABILITY_FINDINGS
     
@@ -93,9 +98,187 @@ def check_access_control(url):
     except requests.exceptions.RequestException:
         VULNERABILITY_FINDINGS.append({"type": "Broken Access Control (BAC)", "status": "ERROR", "severity": "MEDIUM", "details": "Check failed due to connection error."})
 
-# --- FUNCTION: GENERATE FINAL REPORT (Includes JSON output) ---
+
+# Function for Week 5: Check Weak/Default Credentials
+def check_weak_credentials(url):
+    global VULNERABILITY_FINDINGS
+    global WEAK_CREDENTIALS 
+    
+    login_endpoint = f"{url}/rest/user/login"
+    successful_login = False
+    
+    try:
+        for username, password in WEAK_CREDENTIALS:
+            
+            payload = {
+                "email": username,
+                "password": password
+            }
+            
+            response = requests.post(login_endpoint, json=payload, timeout=5)
+            
+            if response.status_code == 200 and "authentication" in response.json().get("status", ""):
+                successful_login = True
+                token = response.json().get("authentication", {}).get("token", "No Token Found")
+                
+                VULNERABILITY_FINDINGS.append({
+                    "type": "Weak Credential Testing",
+                    "status": "VULNERABLE",
+                    "severity": "HIGH",
+                    "details": f"Successful login with weak credential: {username}/{password}. Captured token for session analysis."
+                })
+                break 
+
+        if not successful_login:
+             VULNERABILITY_FINDINGS.append({"type": "Weak Credential Testing", "status": "PASSED", "severity": "LOW"})
+
+    except requests.exceptions.RequestException:
+        VULNERABILITY_FINDINGS.append({"type": "Weak Credential Testing", "status": "ERROR", "severity": "MEDIUM", "details": "Check failed due to connection error."})
+    except json.JSONDecodeError:
+        pass
+        
+        
+# Function for Week 5: Session Cookie Analysis (Simplified Check)
+def analyze_session_cookie(url):
+    global VULNERABILITY_FINDINGS
+    
+    try:
+        # 1. Make an unauthenticated request to get the initial cookie
+        response = requests.get(url, timeout=5)
+        
+        # 2. Extract the Set-Cookie header
+        set_cookie_header = response.headers.get('Set-Cookie')
+        
+        # We only check if *any* Set-Cookie header is present
+        if set_cookie_header: 
+            
+            missing_flags = []
+            
+            if "httponly" not in set_cookie_header.lower():
+                missing_flags.append("HttpOnly")
+            
+            if "secure" not in set_cookie_header.lower():
+                missing_flags.append("Secure")
+                
+            if "samesite" not in set_cookie_header.lower():
+                missing_flags.append("SameSite")
+            
+            if missing_flags:
+                VULNERABILITY_FINDINGS.append({
+                    "type": "Session Cookie Analysis",
+                    "status": "VULNERABLE",
+                    "severity": "HIGH",
+                    "details": f"Missing critical security flags: {', '.join(missing_flags)}. This exposes the cookie to XSS attacks or CSRF."
+                })
+            else:
+                VULNERABILITY_FINDINGS.append({"type": "Session Cookie Analysis", "status": "PASSED", "severity": "LOW"})
+
+        else:
+            VULNERABILITY_FINDINGS.append({"type": "Session Cookie Analysis", "status": "INFO", "severity": "LOW", "details": "No Set-Cookie header detected for analysis on the root page."})
+
+    except requests.exceptions.RequestException:
+        VULNERABILITY_FINDINGS.append({"type": "Session Cookie Analysis", "status": "ERROR", "severity": "MEDIUM", "details": "Check failed due to connection error."})
+
+
+# New function for Week 5: Brute-Force Attack Simulation
+def simulate_brute_force(url):
+    global VULNERABILITY_FINDINGS
+    
+    login_endpoint = f"{url}/rest/user/login"
+    test_payload = {"email": "nonexistent@test.com", "password": "wrong_password"}
+    ATTEMPT_COUNT = 15 # Send a reasonable burst of failed requests
+    RATE_LIMIT_STATUS = 429
+    
+    try:
+        # Check 1: Initial failed request baseline (expect 401 Unauthorized)
+        initial_response = requests.post(login_endpoint, json=test_payload, timeout=5)
+
+        if initial_response.status_code != 401:
+             VULNERABILITY_FINDINGS.append({
+                "type": "Brute-Force Simulation",
+                "status": "INFO",
+                "severity": "LOW",
+                "details": f"Initial login attempt did not return 401 (returned {initial_response.status_code}). Skipping rate limit test."
+            })
+             return
+
+        # Check 2: Send a rapid burst of failed requests
+        for i in range(ATTEMPT_COUNT):
+            response = requests.post(login_endpoint, json=test_payload, timeout=1) 
+            
+            # Check for Rate Limiting status code
+            if response.status_code == RATE_LIMIT_STATUS:
+                VULNERABILITY_FINDINGS.append({
+                    "type": "Brute-Force Simulation",
+                    "status": "PASSED",
+                    "severity": "LOW",
+                    "details": f"Application uses rate limiting. Detected status code {RATE_LIMIT_STATUS} after {i+1} attempts."
+                })
+                return # Defense mechanism found, stop testing
+
+        # Check 3: If no rate limiting was hit, it is vulnerable
+        VULNERABILITY_FINDINGS.append({
+            "type": "Brute-Force Simulation",
+            "status": "VULNERABLE",
+            "severity": "HIGH",
+            "details": f"No rate limiting or account lockout detected after {ATTEMPT_COUNT} rapid failed logins (status code remained {initial_response.status_code})."
+        })
+
+    except requests.exceptions.RequestException:
+        VULNERABILITY_FINDINGS.append({"type": "Brute-Force Simulation", "status": "ERROR", "severity": "MEDIUM", "details": "Check failed due to connection error."})
+
+# New function for Week 5: Session Fixation Testing
+def check_session_fixation(url):
+    global VULNERABILITY_FINDINGS
+    login_endpoint = f"{url}/rest/user/login"
+    
+    try:
+        # 1. Capture initial unauthenticated session cookie (the fixated ID)
+        s = requests.Session()
+        initial_response = s.get(url, timeout=5)
+        
+        # Extract the session ID/Cookie for analysis 
+        initial_cookies = s.cookies.get_dict()
+        
+        if not initial_cookies:
+            VULNERABILITY_FINDINGS.append({"type": "Session Fixation Testing", "status": "INFO", "severity": "LOW", "details": "Could not capture an initial session cookie/ID to test."})
+            return
+
+        # Use the first captured cookie name/value as the 'fixated' ID
+        cookie_name = list(initial_cookies.keys())[0]
+        fixated_id = initial_cookies[cookie_name]
+        
+        # 2. Attempt a successful login using a known good account 
+        login_payload = {
+            "email": "admin@juice-sh.op",
+            "password": "admin"
+        }
+        
+        login_response = s.post(login_endpoint, json=login_payload, timeout=5)
+        
+        # 3. Check if the session ID was regenerated post-login
+        if login_response.status_code == 200:
+            final_cookies = s.cookies.get_dict()
+            final_id = final_cookies.get(cookie_name)
+            
+            if final_id and final_id == fixated_id:
+                VULNERABILITY_FINDINGS.append({
+                    "type": "Session Fixation Testing",
+                    "status": "VULNERABLE",
+                    "severity": "HIGH",
+                    "details": f"Session ID ({cookie_name}) was NOT regenerated after login (Fixated ID: {fixated_id})."
+                })
+            else:
+                VULNERABILITY_FINDINGS.append({"type": "Session Fixation Testing", "status": "PASSED", "severity": "LOW", "details": "Session ID was regenerated after successful login."})
+        
+        else:
+            VULNERABILITY_FINDINGS.append({"type": "Session Fixation Testing", "status": "INFO", "severity": "LOW", "details": "Known login failed (check credentials or target), test inconclusive."})
+
+    except requests.exceptions.RequestException:
+        VULNERABILITY_FINDINGS.append({"type": "Session Fixation Testing", "status": "ERROR", "severity": "MEDIUM", "details": "Check failed due to connection error."})
+
 def generate_report(url):
-    # 1. Generate Terminal Output 
+    
     print("\n" + "="*50)
     print(f"| WEB SCANNER REPORT | TARGET: {url} |")
     print("="*50)
@@ -105,7 +288,6 @@ def generate_report(url):
         print("="*50)
         return
 
-    # Print summary table
     print(f"| {'TYPE':<25} | {'STATUS':<10} | {'SEVERITY':<10} |")
     print("-" * 50)
     
@@ -121,7 +303,6 @@ def generate_report(url):
     print(f"| TOTAL VULNERABILITIES FOUND: {total_vulnerabilities:<20} |")
     print("="*50)
     
-    # 2. Generate JSON File
     report_data = {
         "target": url,
         "total_vulnerabilities": total_vulnerabilities,
@@ -137,8 +318,6 @@ def generate_report(url):
     except Exception as e:
         print(f"[-] Error saving JSON report: {e}")
 
-
-# Main scanner function
 def run_scanner(url):
     print(f"Starting scan for {url}")
     
@@ -147,21 +326,24 @@ def run_scanner(url):
         print(f"Status Code: {response.status_code}")
         
         if "OWASP Juice Shop" in response.text:
-            # RUN ALL VULNERABILITY CHECKS
             check_sql_injection(url)  
             check_xss(url)            
             check_access_control(url)
             
-            # --- FINAL STEP: GENERATE REPORT ---
+            # --- WEEK 5 AUTHENTICATION CHECKS ---
+            check_weak_credentials(url) 
+            analyze_session_cookie(url) 
+            simulate_brute_force(url) 
+            check_session_fixation(url) # <--- FINAL WEEK 5 CALL
+            # ------------------------------------------
+            
             generate_report(url)
-            # -----------------------------------
             
     except requests.exceptions.ConnectionError:
         print("[-] Fatal Error: Initial connection failed (Is Docker running?).")
     except requests.exceptions.RequestException:
         print("[-] Fatal Error: Initial connection failed due to an unknown error.")
 
-# Execution block uses argparse to get the target URL
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="WebScanPro: A simple web security scanner.")
@@ -173,5 +355,5 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     
-    target_url = args.url # Use the URL provided by the user
+    target_url = args.url
     run_scanner(target_url)
