@@ -138,18 +138,18 @@ def check_weak_credentials(url):
         pass
         
         
-# Function for Week 5: Session Cookie Analysis (Simplified Check)
+
 def analyze_session_cookie(url):
     global VULNERABILITY_FINDINGS
     
     try:
-        # 1. Make an unauthenticated request to get the initial cookie
+        
         response = requests.get(url, timeout=5)
         
-        # 2. Extract the Set-Cookie header
+    
         set_cookie_header = response.headers.get('Set-Cookie')
         
-        # We only check if *any* Set-Cookie header is present
+        
         if set_cookie_header: 
             
             missing_flags = []
@@ -180,17 +180,17 @@ def analyze_session_cookie(url):
         VULNERABILITY_FINDINGS.append({"type": "Session Cookie Analysis", "status": "ERROR", "severity": "MEDIUM", "details": "Check failed due to connection error."})
 
 
-# New function for Week 5: Brute-Force Attack Simulation
+
 def simulate_brute_force(url):
     global VULNERABILITY_FINDINGS
     
     login_endpoint = f"{url}/rest/user/login"
     test_payload = {"email": "nonexistent@test.com", "password": "wrong_password"}
-    ATTEMPT_COUNT = 15 # Send a reasonable burst of failed requests
+    ATTEMPT_COUNT = 15 
     RATE_LIMIT_STATUS = 429
     
     try:
-        # Check 1: Initial failed request baseline (expect 401 Unauthorized)
+        
         initial_response = requests.post(login_endpoint, json=test_payload, timeout=5)
 
         if initial_response.status_code != 401:
@@ -202,11 +202,11 @@ def simulate_brute_force(url):
             })
              return
 
-        # Check 2: Send a rapid burst of failed requests
+        
         for i in range(ATTEMPT_COUNT):
             response = requests.post(login_endpoint, json=test_payload, timeout=1) 
             
-            # Check for Rate Limiting status code
+            
             if response.status_code == RATE_LIMIT_STATUS:
                 VULNERABILITY_FINDINGS.append({
                     "type": "Brute-Force Simulation",
@@ -214,9 +214,9 @@ def simulate_brute_force(url):
                     "severity": "LOW",
                     "details": f"Application uses rate limiting. Detected status code {RATE_LIMIT_STATUS} after {i+1} attempts."
                 })
-                return # Defense mechanism found, stop testing
+                return 
 
-        # Check 3: If no rate limiting was hit, it is vulnerable
+        
         VULNERABILITY_FINDINGS.append({
             "type": "Brute-Force Simulation",
             "status": "VULNERABLE",
@@ -227,28 +227,28 @@ def simulate_brute_force(url):
     except requests.exceptions.RequestException:
         VULNERABILITY_FINDINGS.append({"type": "Brute-Force Simulation", "status": "ERROR", "severity": "MEDIUM", "details": "Check failed due to connection error."})
 
-# New function for Week 5: Session Fixation Testing
+
 def check_session_fixation(url):
     global VULNERABILITY_FINDINGS
     login_endpoint = f"{url}/rest/user/login"
     
     try:
-        # 1. Capture initial unauthenticated session cookie (the fixated ID)
+        
         s = requests.Session()
         initial_response = s.get(url, timeout=5)
         
-        # Extract the session ID/Cookie for analysis 
+        
         initial_cookies = s.cookies.get_dict()
         
         if not initial_cookies:
             VULNERABILITY_FINDINGS.append({"type": "Session Fixation Testing", "status": "INFO", "severity": "LOW", "details": "Could not capture an initial session cookie/ID to test."})
             return
 
-        # Use the first captured cookie name/value as the 'fixated' ID
+        
         cookie_name = list(initial_cookies.keys())[0]
         fixated_id = initial_cookies[cookie_name]
         
-        # 2. Attempt a successful login using a known good account 
+        
         login_payload = {
             "email": "admin@juice-sh.op",
             "password": "admin"
@@ -256,7 +256,7 @@ def check_session_fixation(url):
         
         login_response = s.post(login_endpoint, json=login_payload, timeout=5)
         
-        # 3. Check if the session ID was regenerated post-login
+        
         if login_response.status_code == 200:
             final_cookies = s.cookies.get_dict()
             final_id = final_cookies.get(cookie_name)
