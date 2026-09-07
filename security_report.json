@@ -1,0 +1,42 @@
+[
+    {
+        "type": "SQL Injection",
+        "status": "PASSED",
+        "severity": "LOW",
+        "risk_score": 0.0
+    },
+    {
+        "type": "Reflected XSS",
+        "status": "PASSED",
+        "severity": "LOW",
+        "risk_score": 0.0
+    },
+    {
+        "type": "IDOR / Horizontal Escalation",
+        "status": "VULNERABLE",
+        "severity": "CRITICAL",
+        "risk_score": 9.5,
+        "details": "Access to /rest/user/whoami. Similarity: 0.00",
+        "mitigation": "Use UUIDs/Indirect references instead of plain integers."
+    },
+    {
+        "type": "IDOR / Data Exposure",
+        "status": "PASSED",
+        "severity": "LOW",
+        "risk_score": 0.0
+    },
+    {
+        "type": "Vertical Privilege Escalation",
+        "status": "PASSED",
+        "severity": "LOW",
+        "risk_score": 0.0
+    },
+    {
+        "type": "Broken Access Control (Files)",
+        "status": "VULNERABLE",
+        "severity": "HIGH",
+        "risk_score": 8.2,
+        "details": "Access to /ftp. Similarity: 0.00",
+        "mitigation": "Implement Role-Based Access Control (RBAC)."
+    }
+]
